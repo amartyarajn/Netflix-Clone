@@ -11,7 +11,7 @@ protocol Endpoint {
     var scheme: String { get }
     var baseURL: String { get }
     var path: String { get }
-    var parameters: [URLQueryItem] { get }
+    var parameters: [URLQueryItem]? { get }
     var body: [String:Any]? { get }
     var method: String { get }
     var headers: [String:String]? { get }
@@ -80,13 +80,12 @@ enum APIEndpoint: Endpoint {
     
     private var fixedParameters: [URLQueryItem] {
         return [
-            URLQueryItem(name: "api_key", value: Constants.API_KEY),
             URLQueryItem(name: "language", value: "en-US"),
             URLQueryItem(name: "page", value: "1")
         ]
     }
     
-    var parameters: [URLQueryItem] {
+    var parameters: [URLQueryItem]? {
         var queryItems = fixedParameters
         switch self {
             
@@ -101,9 +100,8 @@ enum APIEndpoint: Endpoint {
                 URLQueryItem(name: "with_watch_monetization_types", value: "flatrate"),
             ])
             return queryItems
-        case .updateList(listType: _, sessionId: let sessionId, accountId: _, titleId: _, mediaType: _, isAdded: _), .getTitleState(sessionId: let sessionId, titleId: _, mediaType: _), .getAccountDetails(sessionId: let sessionId), .deleteSession(sessionId: let sessionId):
+        case .updateList(listType: _, sessionId: let sessionId, accountId: _, titleId: _, mediaType: _, isAdded: _), .getTitleState(sessionId: let sessionId, titleId: _, mediaType: _), .getAccountDetails(sessionId: let sessionId):
             return [
-                URLQueryItem(name: "api_key", value: Constants.API_KEY),
                 URLQueryItem(name: "session_id", value: sessionId)
             ]
         case .getList(listType: _, sessionId: let sessionId, accountId: _, mediaType: _):
@@ -112,13 +110,8 @@ enum APIEndpoint: Endpoint {
                 URLQueryItem(name: "sort_by", value: "created_at.asc")
             ])
             return queryItems
-        case .login:
-            return [URLQueryItem(name: "api_key", value: Constants.API_KEY)]
-        case .getSessionId(requestToken: let requestToken):
-            return [
-                URLQueryItem(name: "api_key", value: Constants.API_KEY),
-                URLQueryItem(name: "request_token", value: requestToken)
-            ]
+        case .login, .getSessionId(requestToken: _), .deleteSession(sessionId: _):
+            return nil
         default:
             return fixedParameters
         }
@@ -126,6 +119,10 @@ enum APIEndpoint: Endpoint {
     
     var body: [String : Any]? {
         switch self {
+        case .deleteSession(sessionId: let sessionId):
+            return ["session_id" : sessionId]
+        case .getSessionId(requestToken: let requestToken):
+            return ["request_token" : requestToken]
         case .updateList(listType: let listType, sessionId: _, accountId: _, titleId: let titleId, mediaType: let mediaType, isAdded: let isAdded):
             var parameters:[String : Any] = [
                 "media_type": mediaType.rawValue,
@@ -143,17 +140,19 @@ enum APIEndpoint: Endpoint {
     }
     
     var headers: [String : String]? {
+        var headerItems = ["accept": "application/json", "Authorization": Constants.API_KEY]
         switch self {
         case .updateList, .getSessionId, .deleteSession:
-            return ["content-type": "application/json"]
+            headerItems["content-type"] = "application/json"
+            return headerItems
         default:
-            return nil
+            return headerItems
         }
     }
     
     var method: String {
         switch self {
-        case .updateList:
+        case .updateList, .getSessionId(requestToken: _):
             return "POST"
         case .deleteSession:
             return "DELETE"
